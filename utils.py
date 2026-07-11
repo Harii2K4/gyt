@@ -42,7 +42,17 @@ def repoFile(repo: Repository, *path) -> str:
 
 
 def repoDir(repo: Repository, *path, mkdir=False) -> str | None:
+    """Creates the dir for the repo if it doesnt exist
 
+    Args:
+        mkdir (default=False): Create the dir if doesnt
+        repo: Repo instance
+        *path: path of the repo
+
+    Returns:
+        str
+
+    """
     path = repoPath(repo, *path)
 
     if os.path.exists(path):
@@ -58,6 +68,11 @@ def repoDir(repo: Repository, *path, mkdir=False) -> str | None:
 
 
 def getDefaultConfig() -> configparser.ConfigParser:
+    """create intial gyt config
+
+    Returns:
+        configparser.ConfigParser
+    """
     ret = configparser.ConfigParser()
 
     ret.add_section("core")
@@ -69,7 +84,14 @@ def getDefaultConfig() -> configparser.ConfigParser:
 
 
 def repoCreate(path: str):
+    """Create a repo with worktree and .gyt dir
 
+    Args:
+        path: repo path default is curr
+
+    Raises:
+        Exception: when not a dir or dir doesnt exist
+    """
     repo = Repository(path, True)
 
     # do some dumb checks
@@ -99,6 +121,12 @@ def repoCreate(path: str):
 
 
 def repoRemove(*path):
+    """Used to remove the .gyt file from the repo
+        *path: path to the repo root
+
+    Raises:
+        Exception: when no .gyt dir in the repo
+    """
     repo = Repository(*path)
 
     if os.path.exists(repo.gytDir):
@@ -109,3 +137,23 @@ def repoRemove(*path):
 
     else:
         raise Exception("Brother there is no .gyt in this directory")
+
+
+def repoFind(path=".", required=True):
+
+    realPath = os.path.realpath(path)
+
+    gytDir = os.path.join(realPath, ".gyt")
+
+    if os.path.exists(gytDir) and os.path.isdir(gytDir):
+        return gytDir
+
+    splitPath = realPath.split("/")
+
+    if len(splitPath) == 2:
+        if required:
+            raise Exception("no .gyt along the file tree")
+        else:
+            return None
+
+    return repoFind(os.path.join("../", path))
