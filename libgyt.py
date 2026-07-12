@@ -2,7 +2,7 @@ import argparse
 import sys
 import os
 
-from utils import repoCreate, repoRemove
+from utils import Repository, catFile, hashObject, repoCreate, repoFind, repoRemove
 
 
 # from datetime import datetime
@@ -24,6 +24,46 @@ def cmdInit(args: argparse.Namespace):
 
 def cmdRemove(args: argparse.Namespace):
     repoRemove(args.path)
+
+
+def cmdCatFile(args: argparse.Namespace):
+    repoRoot = repoFind(".")
+    if not repoRoot:
+        raise Exception("Not in a gyt repo , use init to instialise")
+
+    catFile(Repository(repoRoot), args.objectid, args.type.encode())
+
+
+def cmdHashObject(args: argparse.Namespace):
+    print(args)
+    repoRoot = repoFind()
+    if repoRoot is None:
+        raise Exception(
+            "Not in gyt repo either use gyt init to create one or do not pass -w"
+        )
+
+    if args.write:
+        repo = Repository(repoRoot)
+    else:
+        repo = None
+
+    objectPath = os.path.join(repoRoot, args.path)
+    if not os.path.exists(objectPath):
+        raise Exception(f"The path {objectPath} doesnt exist ")
+
+    with open(args.path, "rb") as f:
+        contents = f.read()
+
+    objectType = args.type.encode()
+    if objectType == b"":
+        if os.path.isdir(objectPath):
+            objectType = b"tree"
+        elif os.path.isfile(objectPath):
+            objectType = b"blob"
+        else:
+            raise Exception(f"{objectType} is not a valid Gyt type")
+
+    hashObject(repo, objectType, contents)
 
 
 def generateParse():
@@ -58,6 +98,56 @@ def generateParse():
         help="Where the .gyt is present to delete",
     )
 
+    arsp = argSubParser.add_parser(
+        "cat-file", help="Get print the contents of git object"
+    )
+    arsp.add_argument(
+        "type",
+        metavar="type",
+        nargs="?",
+        choices=["blob", "commit", "tag", "tree"],
+        type=str,
+        default="",
+        help="type of gyt object can be blob , commit , tree or tag",
+    )
+
+    arsp.add_argument(
+        "objectid",
+        metavar="objectId",
+        type=str,
+        help="The Identifier for the object to display can be hash , branch , HEAD",
+    )
+
+    arsp = argSubParser.add_parser(
+        "hash-object", help="Compute the hash Id and optionally store the object"
+    )
+    arsp.add_argument(
+        "-w",
+        metavar="write",
+        dest="write",
+        nargs="?",
+        type=bool,
+        default=False,
+        help="Whether to write object into gyt objects store (default=False)",
+    )
+
+    arsp.add_argument(
+        "-t",
+        metavar="type",
+        dest="type",
+        nargs="?",
+        choices=["blob", "commit", "tag", "tree"],
+        default="",
+        type=str,
+        help="type of gyt object can be blob , commit , tree or tag",
+    )
+
+    arsp.add_argument(
+        "path",
+        metavar="path",
+        type=str,
+        help="Path to the content to read into object",
+    )
     return argParser
 
 
@@ -72,5 +162,9 @@ def main(argv=sys.argv[1:]):
                 cmdInit(args)
             case "nuke":
                 cmdRemove(args)
+            case "cat-file":
+                cmdCatFile(args)
+            case "hash-object":
+                cmdHashObject(args)
     except Exception as e:
         print(e)

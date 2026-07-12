@@ -3,6 +3,7 @@ import configparser
 import shutil
 import zlib
 import hashlib
+import sys
 
 
 class Repository:
@@ -14,22 +15,22 @@ class Repository:
         self.worktree = path
         self.gytDir = os.path.join(path, ".gyt")
 
-        if not (force or os.path.isdir(self.gytDir)):
-            raise Exception(f"Not a Git repository {path}")
-
-        # Read configuration file in .git/config
-        self.conf = configparser.ConfigParser()
-        cf = repoFile(self, "config")
-
-        if cf and os.path.exists(cf):
-            self.conf.read([cf])
-        elif not force:
-            raise Exception("Configuration file missing")
-
-        if not force:
-            vers = int(self.conf.get("core", "repositoryformatversion"))
-            if vers != 0:
-                raise Exception(f"Unsupported repositoryformatversion: {vers}")
+        # if not (force or os.path.isdir(self.gytDir)):
+        #     raise Exception(f"Not a Git repository {path}")
+        #
+        # # Read configuration file in .git/config
+        # self.conf = configparser.ConfigParser()
+        # cf = repoFile(self, "config")
+        #
+        # if cf and os.path.exists(cf):
+        #     self.conf.read([cf])
+        # elif not force:
+        #     raise Exception("Configuration file missing")
+        #
+        # if not force:
+        #     vers = int(self.conf.get("core", "repositoryformatversion"))
+        #     if vers != 0:
+        #         raise Exception(f"Unsupported repositoryformatversion: {vers}")
 
 
 class GytObject:
@@ -39,14 +40,24 @@ class GytObject:
         else:
             self.deserialize(data)
 
-    def deserialize(self, data):
+    def deserialize(self, data: bytes) -> str | None:
         raise Exception("Not implemented")
 
-    def serialize(self, repo=None):
+    def serialize(self, repo=None) -> bytes | None:
         raise Exception("Not implemented")
 
     def init(self):
         raise Exception("Not implemented")
+
+
+class GytBlob(GytObject):
+    type = b"blob"
+
+    def deserialize(self, data):
+        self.blobData = data
+
+    def serialize(self, repo=None) -> bytes:
+        return self.blobData
 
 
 def repoPath(repo: Repository, *path) -> str:
@@ -176,13 +187,24 @@ def repoRemove(*path):
 
 
 def repoFind(path=".", required=True):
+    """Find the repo root (where .gyt is present) by rec traversing up the tree from the curr dir
 
+    Args:
+        path (default = .): curr dir or specific path
+        required (default = True): if we definitely require the root
+
+    Returns:
+        str
+
+    Raises:
+        Exception: If no .gyt in the tree
+    """
     realPath = os.path.realpath(path)
 
     gytDir = os.path.join(realPath, ".gyt")
 
     if os.path.exists(gytDir) and os.path.isdir(gytDir):
-        return gytDir
+        return realPath
 
     splitPath = realPath.split("/")
 
@@ -214,29 +236,36 @@ def objectRead(repo: Repository, sha: str):
             raise Exception("No null byte")
 
         # b'commit 18\x00hi my name is hari'
-        objectType = contentsRaw[:firstSpaceIdx].decode()
+        objectType = contentsRaw[:firstSpaceIdx]
         objectSize = int(contentsRaw[firstSpaceIdx + 1 : nullByteIdx].decode("ascii"))
 
         if objectSize != len(contentsRaw) - nullByteIdx - 1:
             raise Exception(f"Malformed object {sha}: bad length")
 
         # TODO:Add the switch after we create the different objects
+        objectContent = contentsRaw[nullByteIdx + 1 :]
 
-        # match (objectType):
-        #     case "commit":
-        #         objectInstance =
+        match objectType:
+            case b"blob":
+                return GytBlob(objectContent)
+            case _:
+                raise Exception("Not a proper Gyt Object type")
 
 
-def objectWrite(gytObject, repo: Repository | None = None):
+def objectWrite(repo: Repository | None, gytObject):
+    """If repo is not None writes object into .gyt/objects or simply return hash.
 
-    # byteData = gytObject.serialize()
-    byteData = gytObject.encode()
+    Args:
+        gytObject : blob | tree | commit | hash
+        repo: repos object
+
+    Returns:
+        str
+    """
+    byteData = gytObject.serialize()
 
     # b'commit 18\x00hi my name is hari'
-    byteData = (
-        "commit".encode() + b" " + str(len(byteData)).encode() + b"\x00" + byteData
-    )
-    print(byteData)
+    byteData = gytObject.type + b" " + str(len(byteData)).encode() + b"\x00" + byteData
 
     sha = hashlib.sha1(byteData).hexdigest()
 
@@ -247,3 +276,54 @@ def objectWrite(gytObject, repo: Repository | None = None):
         with open(objectPath, "wb") as f:
             f.write(compressedData)
     return sha
+
+
+def findObject(repo: Repository, objectId: str, objectType: bytes | None):
+    """Find the object filename /hashid
+
+    Args:
+        repo: [TODO:description]
+        objectId: [TODO:description]
+        objectType: [TODO:description]
+
+    Returns:
+        [TODO:return]
+    """
+    return objectId
+
+
+def catFile(repo: Repository, objectId: str, objectType: bytes | None):
+    gytObject = objectRead(repo, findObject(repo, objectId, objectType))
+    if gytObject:
+        sys.stdout.buffer.write(gytObject.serialize() + b"\n")
+    else:
+        raise Exception(
+            "No object in .gyt/objects dir with the hashid ,check the id or it might be a dir and not a file"
+        )
+
+
+def getGytObject(objectType: bytes, data: bytes):
+    """Get the gytObject based on type
+
+    Args:
+        objectType: type of obj
+        data: content of obj
+
+    Returns:
+        A subclass of GytObject
+
+    Raises:
+        Exception: invalid object type
+    """
+    match objectType:
+        case b"blob":
+            return GytBlob(data)
+        case _:
+            raise Exception(f"Not a valid Gyt Object type : {objectType}")
+
+
+def hashObject(repo: Repository | None, objectType: bytes, data: bytes):
+    gytObject = getGytObject(objectType, data)
+
+    objectHash = objectWrite(repo, gytObject).encode()
+    sys.stdout.buffer.write(objectHash + b"\n")
