@@ -32,6 +32,22 @@ class Repository:
                 raise Exception(f"Unsupported repositoryformatversion: {vers}")
 
 
+class GytObject:
+    def __init__(self, data=None) -> None:
+        if data is None:
+            self.init()
+        else:
+            self.deserialize(data)
+
+    def deserialize(self, data):
+        raise Exception("Not implemented")
+
+    def serialize(self, repo=None):
+        raise Exception("Not implemented")
+
+    def init(self):
+        raise Exception("Not implemented")
+
 
 def repoPath(repo: Repository, *path) -> str:
     """Returns the path under repo.gytDir
@@ -177,3 +193,57 @@ def repoFind(path=".", required=True):
             return None
 
     return repoFind(os.path.join("../", path))
+
+
+def objectRead(repo: Repository, sha: str):
+
+    objectFile = repoPath(repo, "objects", sha[:2], sha[2:])
+
+    if not os.path.isfile(objectFile):
+        return None
+
+    with open(objectFile, "rb") as f:
+        contentsRaw = zlib.decompress(f.read())
+
+        firstSpaceIdx = contentsRaw.find(b" ")
+        nullByteIdx = contentsRaw.find(b"\x00")
+
+        if firstSpaceIdx == -1:
+            raise Exception("No space")
+        if nullByteIdx == -1:
+            raise Exception("No null byte")
+
+        # b'commit 18\x00hi my name is hari'
+        objectType = contentsRaw[:firstSpaceIdx].decode()
+        objectSize = int(contentsRaw[firstSpaceIdx + 1 : nullByteIdx].decode("ascii"))
+
+        if objectSize != len(contentsRaw) - nullByteIdx - 1:
+            raise Exception(f"Malformed object {sha}: bad length")
+
+        # TODO:Add the switch after we create the different objects
+
+        # match (objectType):
+        #     case "commit":
+        #         objectInstance =
+
+
+def objectWrite(gytObject, repo: Repository | None = None):
+
+    # byteData = gytObject.serialize()
+    byteData = gytObject.encode()
+
+    # b'commit 18\x00hi my name is hari'
+    byteData = (
+        "commit".encode() + b" " + str(len(byteData)).encode() + b"\x00" + byteData
+    )
+    print(byteData)
+
+    sha = hashlib.sha1(byteData).hexdigest()
+
+    if repo:
+        objectPath = repoFile(repo, "objects", sha[:2], sha[2:])
+        compressedData = zlib.compress(byteData)
+
+        with open(objectPath, "wb") as f:
+            f.write(compressedData)
+    return sha
