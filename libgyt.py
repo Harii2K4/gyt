@@ -35,7 +35,6 @@ def cmdCatFile(args: argparse.Namespace):
 
 
 def cmdHashObject(args: argparse.Namespace):
-    print(args)
     repoRoot = repoFind()
     if repoRoot is None:
         raise Exception(
@@ -47,21 +46,24 @@ def cmdHashObject(args: argparse.Namespace):
     else:
         repo = None
 
-    objectPath = os.path.join(repoRoot, args.path)
-    if not os.path.exists(objectPath):
-        raise Exception(f"The path {objectPath} doesnt exist ")
+    if args.checkIpBuffer:
+        contents = sys.stdin.buffer.read()
+        objectType = b"blob"
 
-    with open(args.path, "rb") as f:
-        contents = f.read()
+    else:
+        if args.path == "":
+            raise Exception("Object path is '' , enter a proper object path")
+        with open(args.path, "rb") as f:
+            contents = f.read()
 
-    objectType = args.type.encode()
-    if objectType == b"":
-        if os.path.isdir(objectPath):
-            objectType = b"tree"
-        elif os.path.isfile(objectPath):
-            objectType = b"blob"
-        else:
-            raise Exception(f"{objectType} is not a valid Gyt type")
+        objectType = args.type.encode()
+        if objectType == b"":
+            if os.path.isdir(objectPath):
+                objectType = b"tree"
+            elif os.path.isfile(objectPath):
+                objectType = b"blob"
+            else:
+                raise Exception(f"{objectType} is not a valid Gyt type")
 
     hashObject(repo, objectType, contents)
 
@@ -123,12 +125,17 @@ def generateParse():
     )
     arsp.add_argument(
         "-w",
-        metavar="write",
         dest="write",
-        nargs="?",
-        type=bool,
+        action="store_true",
         default=False,
-        help="Whether to write object into gyt objects store (default=False)",
+        help="Whether to write object into gyt objects store ",
+    )
+    arsp.add_argument(
+        "--stdin",
+        dest="checkIpBuffer",
+        action="store_true",
+        default=False,
+        help="To use the stdin buffer as content for the object",
     )
 
     arsp.add_argument(
@@ -146,6 +153,8 @@ def generateParse():
         "path",
         metavar="path",
         type=str,
+        nargs="?",
+        default="",
         help="Path to the content to read into object",
     )
     return argParser
