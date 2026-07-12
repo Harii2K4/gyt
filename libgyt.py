@@ -36,10 +36,18 @@ def cmdCatFile(args: argparse.Namespace):
 
 def cmdHashObject(args: argparse.Namespace):
     repoRoot = repoFind()
+    objectPath = os.path.realpath(args.path)
+
     if repoRoot is None:
         raise Exception(
             "Not in gyt repo either use gyt init to create one or do not pass -w"
         )
+
+    if repoRoot not in os.path.realpath(args.path):
+        raise Exception(f"Object path {objectPath} not in gyt repo {repoRoot}")
+
+    if not os.path.exists(objectPath):
+        raise Exception(f"The path {objectPath} doesnt exist ")
 
     if args.write:
         repo = Repository(repoRoot)
