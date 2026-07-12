@@ -1,16 +1,36 @@
 import os
 import configparser
 import shutil
+import zlib
+import hashlib
 
 
 class Repository:
     gytDir: str = ""
     worktree: str = ""
-    conf: str = ""
+    conf = None
 
     def __init__(self, path: str, force=False) -> None:
         self.worktree = path
         self.gytDir = os.path.join(path, ".gyt")
+
+        if not (force or os.path.isdir(self.gytDir)):
+            raise Exception(f"Not a Git repository {path}")
+
+        # Read configuration file in .git/config
+        self.conf = configparser.ConfigParser()
+        cf = repoFile(self, "config")
+
+        if cf and os.path.exists(cf):
+            self.conf.read([cf])
+        elif not force:
+            raise Exception("Configuration file missing")
+
+        if not force:
+            vers = int(self.conf.get("core", "repositoryformatversion"))
+            if vers != 0:
+                raise Exception(f"Unsupported repositoryformatversion: {vers}")
+
 
 
 def repoPath(repo: Repository, *path) -> str:
