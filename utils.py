@@ -243,11 +243,16 @@ def objectRead(repo: Repository, sha: str):
             raise Exception(f"Malformed object {sha}: bad length")
 
         # TODO:Add the switch after we create the different objects
-        objectContent = contentsRaw[nullByteIdx + 1 :]
+        currObject = contentsRaw[nullByteIdx + 1 :]
 
         match objectType:
             case b"blob":
-                return GytBlob(objectContent)
+                return GytBlob(currObject)
+            case b"tree":
+                treeObject = GytTree()
+                treeObject.deserialize(currObject)
+                return treeObject
+
             case _:
                 raise Exception("Not a proper Gyt Object type")
 
@@ -387,3 +392,85 @@ class GytCommit(GytObject):
 
     def init(self):
         self.kvlm = dict()
+
+
+class GytTreeLeaf(object):
+    def __init__(self, mode: bytes, path: str, sha: str) -> None:
+        self.mode = mode
+        self.path = path
+        self.sha = sha
+        self.type = "tree" if mode.startswith(b"04") else "blob"
+
+
+def parseTreeEntry(idx: int, rawTreeContent: bytes) -> tuple[int, GytTreeLeaf]:
+
+    spaceIdx = rawTreeContent.find(b" ", idx)
+    nullIdx = rawTreeContent.find(b"\x00", idx)
+
+    mode = rawTreeContent[idx:spaceIdx]
+    assert len(mode) == 5 or len(mode) == 6
+    if len(mode) == 5:
+        mode = b"0" + mode
+    path = rawTreeContent[spaceIdx + 1 : nullIdx].decode()
+    sha = bytes.hex(rawTreeContent[nullIdx + 1 : nullIdx + 21])
+
+    return nullIdx + 21, GytTreeLeaf(mode, path, sha)
+
+
+def parseTreeContent(rawTreeContent: bytes) -> list[GytTreeLeaf]:
+    startIdx = 0
+    treeObjects = []
+
+    while startIdx < len(rawTreeContent):
+        startIdx, currTreeObject = parseTreeEntry(startIdx, rawTreeContent)
+        treeObjects.append(currTreeObject)
+
+    return treeObjects
+
+
+def treeLeafSortKey(leaf: GytTreeLeaf):
+    if leaf.mode.startswith(b"04"):
+        return leaf.mode + b"/"
+    else:
+        return leaf.mode
+
+
+def treeSerializer(treeObjsList: list[GytTreeLeaf]) -> bytes:
+    sortedTreeObjs = sorted(treeObjsList, key=treeLeafSortKey)
+    treeData = b""
+
+    for obj in sortedTreeObjs:
+        treeData += (
+            obj.mode + b" " + obj.path.encode("utf8") + b"\x00" + bytes.fromhex(obj.sha)
+        )
+
+    return treeData
+
+
+class GytTree(GytObject):
+    type = b"tree"
+
+    def __init__(self) -> None:
+        self.items = []
+
+    def serialize(self, repo=None) -> bytes | None:
+        return treeSerializer(self.items)
+
+    def deserialize(self, data: bytes) -> str | None:
+        self.items = parseTreeContent(data)
+
+
+def lsTreeContent(repo: Repository, hashId: str, rec: bool = False, path: str = ""):
+    objectName = findObject(repo, hashId, b"tree")
+    currObject = objectRead(repo, objectName)
+
+    if isinstance(currObject, GytBlob) or currObject is None:
+        return
+
+    for entry in currObject.items:
+        if entry.type == "tree" and rec:
+            newPath = entry.path if path == "" else path + f"/{entry.path}"
+            lsTreeContent(repo, entry.sha, rec, newPath)
+        else:
+            finalPath = entry.path if path == "" else path + f"/{entry.path}"
+            print(f"{entry.mode} {entry.type} {entry.sha} {finalPath}")

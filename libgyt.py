@@ -76,6 +76,15 @@ def cmdHashObject(args: argparse.Namespace):
     hashObject(repo, objectType, contents)
 
 
+def cmdLsTree(args: argparse.Namespace):
+    repoRoot = repoFind()
+    if repoRoot:
+        repo = Repository(repoRoot)
+        lsTreeContent(repo, args.hashid[0], rec=args.isRec)
+    else:
+        raise Exception("Not in a gyt repo")
+
+
 def generateParse():
     argParser = argparse.ArgumentParser(
         prog="gyt",
@@ -165,6 +174,24 @@ def generateParse():
         default="",
         help="Path to the content to read into object",
     )
+
+    arsp = argSubParser.add_parser("ls-tree", help="view the contents of a gyt tree")
+    arsp.add_argument(
+        "hashid",
+        metavar="tree",
+        type=str,
+        nargs=1,
+        default="",
+        help="The sha1 id of the tree",
+    )
+    arsp.add_argument(
+        "-r",
+        dest="isRec",
+        action="store_true",
+        default=False,
+        help="Whether to recursively display the directory contents",
+    )
+
     return argParser
 
 
@@ -183,5 +210,8 @@ def main(argv=sys.argv[1:]):
                 cmdCatFile(args)
             case "hash-object":
                 cmdHashObject(args)
+            case "ls-tree":
+                cmdLsTree(args)
+
     except Exception as e:
         print(e)
