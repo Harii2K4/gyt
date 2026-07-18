@@ -3,7 +3,6 @@ import sys
 import os
 
 from utils import (
-    Repository,
     catFile,
     hashObject,
     lsTreeContent,
@@ -11,6 +10,7 @@ from utils import (
     repoFind,
     repoRemove,
 )
+from models import Repository
 
 
 # from datetime import datetime
@@ -19,11 +19,11 @@ from utils import (
 # from math import ceil
 # import zlib
 
-try:
-    import grp
-    import pwd
-except ModuleNotFoundError:
-    pass
+# try:
+#     import grp
+#     import pwd
+# except ModuleNotFoundError:
+#     pass
 
 
 def cmdInit(args: argparse.Namespace):
