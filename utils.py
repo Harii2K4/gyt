@@ -13,7 +13,7 @@ class Repository:
 
     def __init__(self, path: str, force=False) -> None:
         self.worktree = path
-        self.gytDir = os.path.join(path, ".gyt")
+        self.gytDir = os.path.join(path, ".git")
 
         # if not (force or os.path.isdir(self.gytDir)):
         #     raise Exception(f"Not a Git repository {path}")
@@ -201,7 +201,8 @@ def repoFind(path=".", required=True):
     """
     realPath = os.path.realpath(path)
 
-    gytDir = os.path.join(realPath, ".gyt")
+    # gytDir = os.path.join(realPath, ".gyt")
+    gytDir = os.path.join(realPath, ".git")
 
     if os.path.exists(gytDir) and os.path.isdir(gytDir):
         return realPath
@@ -300,7 +301,11 @@ def findObject(repo: Repository, objectId: str, objectType: bytes | None):
 def catFile(repo: Repository, objectId: str, objectType: bytes | None):
     gytObject = objectRead(repo, findObject(repo, objectId, objectType))
     if gytObject:
-        sys.stdout.buffer.write(gytObject.serialize() + b"\n")
+        content = gytObject.serialize()
+        if not content:
+            raise Exception("object is empty no content")
+
+        sys.stdout.buffer.write(content + b"\n")
     else:
         raise Exception(
             "No object in .gyt/objects dir with the hashid ,check the id or it might be a dir and not a file"

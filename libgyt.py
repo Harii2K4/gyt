@@ -2,7 +2,15 @@ import argparse
 import sys
 import os
 
-from utils import Repository, catFile, hashObject, repoCreate, repoFind, repoRemove
+from utils import (
+    Repository,
+    catFile,
+    hashObject,
+    lsTreeContent,
+    repoCreate,
+    repoFind,
+    repoRemove,
+)
 
 
 # from datetime import datetime
