@@ -46,7 +46,7 @@ class GytObject:
     def serialize(self, repo=None) -> bytes | None:
         raise Exception("Not implemented")
 
-    def init(self):
+    def init(self) -> None:
         raise Exception("Not implemented")
 
 
@@ -327,3 +327,63 @@ def hashObject(repo: Repository | None, objectType: bytes, data: bytes):
 
     objectHash = objectWrite(repo, gytObject).encode()
     sys.stdout.buffer.write(objectHash + b"\n")
+
+
+def kvlmParse(raw: bytes) -> dict[bytes | None, list[bytes]]:
+    keyValueMap = {}
+
+    lines = raw.split(b"\n")
+    idx = 0
+
+    while idx < len(lines):
+        currLine = lines[idx]
+
+        if currLine == b"":
+            body = lines[idx:]
+            if None in keyValueMap:
+                keyValueMap[None].extend(body)
+            else:
+                keyValueMap[None] = body
+            break
+
+        else:
+            currLineSplit = currLine.split(b" ")
+            key, values = currLineSplit[0], b" ".join(currLineSplit[1:])
+            if key in keyValueMap:
+                keyValueMap[key].append(values)
+            else:
+                keyValueMap[key] = [values]
+
+            idx += 1
+
+    return keyValueMap
+
+
+def kvlmSerialize(rawParsed: dict[bytes | None, list[bytes]]) -> bytes:
+    rawSerialized = ""
+
+    for key in rawParsed:
+        values = rawParsed[key]
+        try:
+            if key is None:
+                rawSerialized += "\n".join([val.decode() for val in values])
+            elif key:
+                for val in values:
+                    rawSerialized += f"{key.decode()} {val.decode()}\n"
+        except Exception as e:
+            raise Exception(f"kvlm serialize Error: {e}")
+
+    return rawSerialized.encode()
+
+
+class GytCommit(GytObject):
+    type = b"commit"
+
+    def serialize(self, repo=None) -> bytes | None:
+        return kvlmSerialize(self.kvlm)
+
+    def deserialize(self, data: bytes) -> str | None:
+        self.kvlm = kvlmParse(data)
+
+    def init(self):
+        self.kvlm = dict()
